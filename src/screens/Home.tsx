@@ -181,8 +181,9 @@ const Home = () => {
                             <TextInput 
                                 style={styles.memoInput}
                                 multiline
-                                placeholder='잠깐 기록할 메모를 입력하세요!'
+                                placeholder={`잠깐 기록할 메모를 입력하세요!\n(500자까지만 메모가 가능합니다)\n(메모 시 바로 자동 저장됩니다)`}
                                 value={memoItem.text}
+                                maxLength={500}
                                 onChangeText={(text) => {
                                     setMemoList((prev) => 
                                         prev.map((item) => 
