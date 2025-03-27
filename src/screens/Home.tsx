@@ -1,10 +1,13 @@
 import { Keyboard, SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
 import { Text, Card } from '@rneui/themed'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Entypo from 'react-native-vector-icons/Entypo'
 import AntDesign from 'react-native-vector-icons/AntDesign'
 import FontAwesome6 from 'react-native-vector-icons/FontAwesome6'
 import DropDownPicker from 'react-native-dropdown-picker'
+import { storage } from '../utils/storage'
+
+const MEMO_STORAGE_KEY = 'memoList'
 
 const Home = () => {
     const [selectedTime, setSelectedTime] = useState('3')
@@ -81,6 +84,18 @@ const Home = () => {
         Keyboard.dismiss()
     }
 
+    useEffect(() => {
+        const saved = storage.getString(MEMO_STORAGE_KEY)
+        if(saved) {
+            setMemoList(JSON.parse(saved))
+            console.log(JSON.parse(saved))
+        }
+    }, [])
+
+    useEffect(() => {
+        storage.set(MEMO_STORAGE_KEY, JSON.stringify(memoList))
+    }, [memoList])
+
     return (
         <TouchableWithoutFeedback
             onPress={() => {
@@ -90,7 +105,13 @@ const Home = () => {
             }}
         >
             <SafeAreaView style={styles.safeContainer}>
-                <ScrollView nestedScrollEnabled={true} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollViewContentContainer}>
+                <ScrollView 
+                    nestedScrollEnabled={true} 
+                    keyboardShouldPersistTaps="handled" 
+                    showsVerticalScrollIndicator={false} 
+                    contentContainerStyle={styles.scrollViewContentContainer}
+                    contentInsetAdjustmentBehavior="automatic"
+                >
                     <View style={styles.titleHeaderRow}>
                         <Text style={styles.title}>잠깐만 메모</Text>
                         <View style={{ position: 'relative'}}>
@@ -163,9 +184,14 @@ const Home = () => {
                                 placeholder='잠깐 기록할 메모를 입력하세요!'
                                 value={memoItem.text}
                                 onChangeText={(text) => {
-                                    const newList = [...memoList]
-                                    newList[index].text = text
-                                    setMemoList(newList)
+                                    setMemoList((prev) => 
+                                        prev.map((item) => 
+                                            item.id === memoItem.id ? { ...item, text } : item
+                                        )
+                                    )
+                                    // const newList = [...memoList]
+                                    // newList[index].text = text
+                                    // setMemoList(newList)
                                 }}
                                 onFocus={onFocusTextInput}
                             />
@@ -178,6 +204,9 @@ const Home = () => {
                 >
                     <FontAwesome6 name='plus' size={25} color="#DDD" />
                 </TouchableOpacity>
+                <View style={styles.adBanner}>
+                    <Text style={styles.adText}>배너 광고 영역</Text>
+                </View>
             </SafeAreaView>
         </TouchableWithoutFeedback>
     )
@@ -258,8 +287,8 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        right: 30,
-        bottom: 30,
+        right: 15,
+        bottom: 70,
         backgroundColor: '#36454F',
         width: 50,
         height: 50,
@@ -267,6 +296,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 5,
+        borderWidth: 1,
+        borderColor: '#00000022',
     },
     sortDropdownWrapper: {
         width: 150, 
@@ -280,7 +311,17 @@ const styles = StyleSheet.create({
         zIndex: 9999, 
         elevation: 5, 
         borderRadius: 8
-    }
+    },
+    adBanner: {
+        height: 60,
+        backgroundColor: '#EEE',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    adText: {
+        fontSize: 14,
+        color: '#777',
+    },
 })
 
 export default Home
