@@ -1,0 +1,13 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "src/assets/fonts/BlackHanSans-Regular.ttf",
+      "sha1": "55df5d052e2830d785bbf6cbf876d4bd760b9f4f"
+    },
+    {
+      "path": "src/assets/fonts/NanumGothic.ttf",
+      "sha1": "6b61cdb4fe859e3932437d6d816c1944daeff1b2"
+    }
+  ]
+}

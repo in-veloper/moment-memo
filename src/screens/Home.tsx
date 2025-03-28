@@ -230,7 +230,7 @@ const Home = () => {
                                                 setItems={setTimeOptions}
                                                 style={styles.dropdown}
                                                 dropDownContainerStyle={styles.dropdownContainer}
-                                                textStyle={{ fontSize: 14 }}
+                                                textStyle={{ fontSize: 14, fontFamily: 'NanumGothic' }}
                                                 labelStyle={{ color: '#36454F' }}
                                                 selectedItemLabelStyle={{ fontWeight: 'bold' }}
                                                 placeholder="시간 선택"
@@ -238,7 +238,7 @@ const Home = () => {
                                                 closeOnBackPressed={true}
                                             />
                                         </View>
-                                        <Text style={{ color: '#36454F', marginTop: 12, marginLeft: 7}}>후 자동 삭제</Text>
+                                        <Text style={{ color: '#36454F', marginTop: 12, marginLeft: 7, fontFamily: 'NanumGothic',fontWeight: 'bold' }}>후 자동 삭제</Text>
                                     </View>
                                     <View style={styles.buttonGroup}>
                                         {/* <TouchableOpacity onPress={onPressSave}>
@@ -299,8 +299,8 @@ const styles = StyleSheet.create({
         paddingRight: 30,
     },
     title: {
-        fontSize: 20,
-        fontWeight: 'bold'
+        fontSize: 25,
+        fontFamily: 'BlackHanSans-Regular'
     },
     scrollViewContentContainer: {
         flexGrow: 1,
@@ -351,7 +351,8 @@ const styles = StyleSheet.create({
         textAlignVertical: 'top',
         marginTop: 10,
         backgroundColor: '#FAFAFA',
-        elevation: 3
+        elevation: 3,
+        fontFamily: 'NanumGothic'
     },
     buttonGroup: {
         flexDirection: 'row',
