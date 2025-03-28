@@ -2,7 +2,7 @@ import { Keyboard, KeyboardAvoidingView, SafeAreaView, ScrollView, StyleSheet, T
 import { Text, Card } from '@rneui/themed'
 import { useEffect, useState } from 'react'
 import Entypo from 'react-native-vector-icons/Entypo'
-import AntDesign from 'react-native-vector-icons/AntDesign'
+import FontAwesome5 from 'react-native-vector-icons/FontAwesome5'
 import FontAwesome6 from 'react-native-vector-icons/FontAwesome6'
 import DropDownPicker from 'react-native-dropdown-picker'
 import { storage } from '../utils/storage'
@@ -245,7 +245,7 @@ const Home = () => {
                                             <Entypo name='save' size={25} color="#708090" />
                                         </TouchableOpacity> */}
                                         <TouchableOpacity onPress={() => onPressDelete(memoItem.id)}>
-                                            <AntDesign name='delete' size={25} color="#CD5C5C" />
+                                            <FontAwesome5 name='trash-alt' size={25} color="#CD5C5C" />
                                         </TouchableOpacity>
                                     </View>
                                 </View>
