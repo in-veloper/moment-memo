@@ -1,11 +1,13 @@
-import { Keyboard, KeyboardAvoidingView, SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
 import { Text, Card } from '@rneui/themed'
-import { useEffect, useState } from 'react'
-import Entypo from 'react-native-vector-icons/Entypo'
+import { useCallback, useEffect, useState } from 'react'
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5'
 import FontAwesome6 from 'react-native-vector-icons/FontAwesome6'
 import DropDownPicker from 'react-native-dropdown-picker'
 import { storage } from '../utils/storage'
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads'
+import Modal from 'react-native-modal'
+import notifee, { AndroidImportance, TimestampTrigger, TriggerType } from '@notifee/react-native'
 
 type Memo = {
     id: number
@@ -38,6 +40,10 @@ const Home = () => {
     ]
     const [sortOpen, setSortOpen] = useState(false)
     const [selectedSort, setSelectedSort] = useState('latest')
+    const [isDeleteModalVisible, setDeleteModalVisible] = useState(false)
+    const [memoToDelete, setMemoToDelete] = useState<number | null>(null)
+    const [isStorageFullModalVisible, setStorageFullModalVisible] = useState(false)
+    const [scheduledNotifications, setScheduledNotifications] = useState<Set<number>>(new Set())
 
     // const onPressSave = () => {
     //     setOpen(false)
@@ -45,12 +51,57 @@ const Home = () => {
     //     Keyboard.dismiss()
     // }
 
+    // notifee 초기화
+    useEffect(() => {
+        const initializeNotifee = async () => {
+            // 안드로이드 알림 채널 생성
+            if (Platform.OS === 'android') {
+                await notifee.createChannel({
+                    id: 'memo_channel',
+                    name: 'Memo Notifications',
+                    description: 'Notifications for memo expiration',
+                    importance: AndroidImportance.HIGH,
+                    sound: 'default',
+                    vibration: true
+                })
+            }
+
+            if(Platform.OS === 'ios') {
+                await notifee.requestPermission()
+            }
+        }
+
+        initializeNotifee()
+    }, [])
+
     const onPressDelete = (id: number) => {
-        setMemoList((prev) => prev.filter((item) => item.id !== id))
-        setOpen(false)
-        setSortOpen(false)
-        Keyboard.dismiss()
+        setMemoToDelete(id)
+        setDeleteModalVisible(true)
     }
+
+    const confirmDelete = useCallback(async () => {
+        if(memoToDelete != null) {
+            // 삭제 시 해당 메모의 알림 취소
+            await notifee.cancelNotification(memoToDelete.toString())
+            setScheduledNotifications((prev) => {
+                const newSet = new Set(prev)
+                newSet.delete(memoToDelete)
+                return newSet
+            })
+
+            setMemoList((prev) => prev.filter((item) => item.id !== memoToDelete))
+            setOpen(false)
+            setSortOpen(false)
+            Keyboard.dismiss()
+        }
+        setDeleteModalVisible(false)
+        setMemoToDelete(null)
+    }, [memoToDelete])
+
+    const cancelDelete = useCallback(() => {
+        setDeleteModalVisible(false)
+        setMemoToDelete(null)
+    }, [])
 
     const onPressNewCard = () => {
         const newMemo = {
@@ -109,12 +160,22 @@ const Home = () => {
         }
     }, [])
 
+    const handleStorageFullModalClose = useCallback(() => {
+        setStorageFullModalVisible(false)
+        console.log('용량 초과 알림 확인')
+    }, [])
+
     useEffect(() => {
         const timer = setTimeout(() => {
             if(memoList.length === 0) {
                 onPressNewCard()
             }else{
-                storage.set(MEMO_STORAGE_KEY, JSON.stringify(memoList))
+                try {
+                    storage.set(MEMO_STORAGE_KEY, JSON.stringify(memoList))
+                } catch (error) {
+                    console.error('MMKV 저장 실패 : ', error)
+                    setStorageFullModalVisible(true)
+                }
             }
         }, 100)
 
@@ -129,10 +190,43 @@ const Home = () => {
                     if(memo.time === 'none' || !memo.updatedAt) {
                         return true
                     }
+
                     const updatedAt = memo.updatedAt
                     const timeInMinutes = parseInt(memo.time)
                     const timeInMilliseconds = timeInMinutes * 60 * 1000
                     const expirationTime = updatedAt + timeInMilliseconds
+                    const timeLeft = expirationTime - now
+                    
+                    // 삭제 1분 전 알림 예약
+                    if(timeLeft <= 61 * 1000 && timeLeft > 60 * 1000 && !scheduledNotifications.has(memo.id)) {
+                        const fireDate = new Date(expirationTime - 60 * 1000)
+                        const trigger: TimestampTrigger = {
+                            type: TriggerType.TIMESTAMP,
+                            timestamp: fireDate.getTime()
+                        }
+
+                        notifee.createTriggerNotification(
+                            {
+                                id: memo.id.toString(),
+                                title: '블립메모',
+                                body: `"${memo.text.slice(0, 20)}${memo.text.length > 20 ? '...' : ''}" 메모가 1분 후 삭제됩니다`,
+                                android: {
+                                    channelId: 'memo_channel',
+                                    sound: 'default',
+                                    vibrationPattern: [300, 500],
+                                    pressAction: {
+                                        id: 'default'
+                                    }
+                                },
+                                ios: {
+                                    sound: 'default'
+                                }
+                            },
+                            trigger
+                        )
+                        setScheduledNotifications((prev) => new Set(prev).add(memo.id))
+                    }
+
                     return now < expirationTime
                 })
 
@@ -146,21 +240,29 @@ const Home = () => {
                     updatedList.push(newMemo)
                 }
 
-                storage.set(MEMO_STORAGE_KEY, JSON.stringify(updatedList))
+                try {
+                    storage.set(MEMO_STORAGE_KEY, JSON.stringify(updatedList))
+                } catch (error) {
+                    console.error('MMKV 저장 실패 : ', error)
+                    setStorageFullModalVisible(true)
+                }
+
                 return updatedList
             })
         }, 1000)
         return () => clearInterval(interval)
     })
 
+    const handleBackgroundPress = useCallback(() => {
+        if(!isDeleteModalVisible && !isStorageFullModalVisible) {
+            setOpen(false)
+            setSortOpen(false)
+            Keyboard.dismiss()
+        }
+    }, [isDeleteModalVisible, isStorageFullModalVisible])
+
     return (
-        <TouchableWithoutFeedback
-            onPress={() => {
-                setOpen(false)
-                setSortOpen(false)
-                Keyboard.dismiss()
-            }}
-        >
+        <TouchableWithoutFeedback onPress={handleBackgroundPress}>
             <SafeAreaView style={styles.safeContainer}>
                 <KeyboardAvoidingView
                     behavior={'height'}
@@ -196,6 +298,8 @@ const Home = () => {
                                             listMode='SCROLLVIEW'
                                             onClose={() => setSortOpen(false)}
                                             showArrowIcon={false}
+                                            zIndex={10000}
+                                            zIndexInverse={10000}
                                         />
                                     </View>
                                 )}
@@ -236,6 +340,8 @@ const Home = () => {
                                                 placeholder="시간 선택"
                                                 listMode="SCROLLVIEW"
                                                 closeOnBackPressed={true}
+                                                zIndex={5000}
+                                                zIndexInverse={5000}
                                             />
                                         </View>
                                         <Text style={{ color: '#36454F', marginTop: 12, marginLeft: 7, fontFamily: 'NanumGothic',fontWeight: 'bold' }}>후 자동 삭제</Text>
@@ -275,8 +381,65 @@ const Home = () => {
                     </TouchableOpacity>
                 </KeyboardAvoidingView>
                 <View style={styles.adBanner}>
-                    <Text style={styles.adText}>배너 광고 영역</Text>
+                    <BannerAd
+                        unitId={TestIds.BANNER}
+                        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+                        requestOptions={{
+                            requestNonPersonalizedAdsOnly: true
+                        }}
+                        onAdFailedToLoad={(error) => {
+                            console.log('배너광고 Load 실패 : ', error)
+                        }}
+                    />
                 </View>
+
+                <Modal
+                    isVisible={isDeleteModalVisible}
+                    onBackdropPress={cancelDelete}
+                    onBackButtonPress={cancelDelete}
+                    style={styles.modal}
+                    animationIn="fadeIn"
+                    animationOut="fadeOut"
+                    animationInTiming={200}
+                    animationOutTiming={200}
+                    backdropTransitionOutTiming={0}
+                    backdropOpacity={0.3}
+                >
+                    <View style={styles.modalContainer}>
+                        <Text style={styles.modalText}>해당 메모를 삭제하시겠습니까?</Text>
+                        <View style={styles.modalButtonContainer}>
+                            <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={cancelDelete}>
+                                <Text style={styles.modalButtonText}>취소</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.modalButton, styles.confirmButton]} onPress={confirmDelete}>
+                                <Text style={styles.modalButtonText}>확인</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                <Modal
+                    isVisible={isStorageFullModalVisible}
+                    onBackdropPress={handleStorageFullModalClose}
+                    onBackButtonPress={handleStorageFullModalClose}
+                    style={styles.modal}
+                    animationIn="fadeIn"
+                    animationOut="fadeOut"
+                    animationInTiming={200}
+                    animationOutTiming={200}
+                    backdropTransitionOutTiming={0}
+                    backdropOpacity={0.3}
+                >
+                    <View style={styles.modalContainer}>
+                        <Text style={styles.modalText}>저장 용량 초과</Text>
+                        <Text style={[styles.modalText, { marginBottom: 20 }]}>저장 공간이 부족합니다. 메모를 삭제하거나 용량을 정리해 주세요</Text>
+                        <View style={styles.modalButtonContainer}>
+                            <TouchableOpacity style={[styles.modalButton, styles.confirmButton]} onPress={handleStorageFullModalClose}>
+                                <Text style={styles.modalButtonText}>확인</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
             </SafeAreaView>
         </TouchableWithoutFeedback>
     )
@@ -396,6 +559,46 @@ const styles = StyleSheet.create({
     adText: {
         fontSize: 14,
         color: '#777',
+    },
+    modal: {
+        justifyContent: 'center',
+        margin: 20,
+    },
+    modalContainer: {
+        backgroundColor: '#F8F8F8',
+        padding: 20,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalText: {
+        fontSize: 17,
+        marginBottom: 20,
+        textAlign: 'center',
+        fontFamily: 'NanumGothic',
+    },
+    modalButtonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+    },
+    modalButton: {
+        flex: 1,
+        padding: 10,
+        marginHorizontal: 5,
+        borderRadius: 5,
+        alignItems: 'center',
+    },
+    confirmButton: {
+        backgroundColor: '#CD5C5C',
+    },
+    cancelButton: {
+        backgroundColor: '#708090',
+    },
+    modalButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontFamily: 'NanumGothic',
     },
 })
 
