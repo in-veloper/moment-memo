@@ -382,7 +382,7 @@ const Home = () => {
                 </KeyboardAvoidingView>
                 <View style={styles.adBanner}>
                     <BannerAd
-                        unitId={TestIds.BANNER}
+                        unitId="ca-app-pub-4250906367423857/4658096589"
                         size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
                         requestOptions={{
                             requestNonPersonalizedAdsOnly: true
