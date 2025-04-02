@@ -9,8 +9,16 @@ import {
 } from 'react-native/Libraries/NewAppScreen';
 import Home from './src/screens/Home';
 import MobileAds from 'react-native-google-mobile-ads';
+import SplashScreen from 'react-native-splash-screen';
 
 function App(): React.JSX.Element {
+
+  useEffect(() => {
+    setTimeout(() => {
+      SplashScreen.hide()
+    }, 1000);
+  }, [])
+
   useEffect(() => {
     MobileAds()
       .initialize()

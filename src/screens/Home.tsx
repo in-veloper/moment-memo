@@ -29,6 +29,7 @@ const Home = () => {
         { label: '1시간', value: '60' },
         { label: '12시간', value: '720' },
         { label: '24시간', value: '1440' },
+        { label: '직접 입력', value: 'custom' }
     ])
     const [memoList, setMemoList] = useState<Memo[]>([])
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
@@ -44,6 +45,17 @@ const Home = () => {
     const [memoToDelete, setMemoToDelete] = useState<number | null>(null)
     const [isStorageFullModalVisible, setStorageFullModalVisible] = useState(false)
     const [scheduledNotifications, setScheduledNotifications] = useState<Set<number>>(new Set())
+    const [isCustomTimeModalVisible, setCustomTimeModalVisible] = useState(false)
+    const [customTimeValue, setCustomTimeValue] = useState<string>('')
+    const [customTimeUnit, setCustomTimeUnit] = useState<string>('minutes')
+    const [unitDropdownOpen, setUnitDropdownOpen] = useState(false)
+
+    // 단위 옵션
+    const timeUnitOptions = [
+        { label: '분', value: 'minutes' },
+        { label: '시간', value: 'hours' },
+        { label: '일', value: 'days' },
+    ]
 
     // const onPressSave = () => {
     //     setOpen(false)
@@ -132,17 +144,61 @@ const Home = () => {
     const onFocusTextInput = () => {
         setOpen(false)
         setSortOpen(false)
+        setUnitDropdownOpen(false)
     }
 
     const onPressFilter = () => {
         setSortOpen((prev) => !prev)
         setOpen(false)
+        setUnitDropdownOpen(false)
         Keyboard.dismiss()
     }
 
     const onOpenDropdown = (index: number) => {
         setSelectedIndex(index)
         Keyboard.dismiss()
+    }
+
+    // 직접 입력 모달 확인 버튼
+    const handleCustomTimeConfirm = () => {
+        const value = parseFloat(customTimeValue)
+        if(isNaN(value) || value <= 0) {
+            Alert.alert('오류', '유효한 숫자를 입력해 주세요')
+            return
+        }
+
+        // 단위에 따라 분으로 변환
+        let minutes: number
+        switch (customTimeUnit) {
+            case 'minutes':
+                minutes = value
+                break
+            case 'hours':
+                minutes = value * 60
+            case 'days':
+                minutes = value * 60 * 24
+                break
+            default:
+                minutes = value
+        }
+
+        if(minutes > 525600) {
+            Alert.alert('오류', '최대 1년까지만 설정 가능합니다')
+            return
+        }
+
+        setMemoList((prev) =>
+            prev.map((item, idx) =>
+                idx === selectedIndex
+                    ? { ...item, time: minutes.toString(), updatedAt: Date.now() }
+                    : item
+            )
+        )
+
+        setCustomTimeModalVisible(false)
+        setCustomTimeValue('')
+        setCustomTimeUnit('minutes')
+        setOpen(false)
     }
 
     useEffect(() => {
@@ -257,9 +313,10 @@ const Home = () => {
         if(!isDeleteModalVisible && !isStorageFullModalVisible) {
             setOpen(false)
             setSortOpen(false)
+            setUnitDropdownOpen(false)
             Keyboard.dismiss()
         }
-    }, [isDeleteModalVisible, isStorageFullModalVisible])
+    }, [isDeleteModalVisible, isStorageFullModalVisible, isCustomTimeModalVisible])
 
     return (
         <TouchableWithoutFeedback onPress={handleBackgroundPress}>
@@ -319,17 +376,21 @@ const Home = () => {
                                                 onClose={() => setSelectedIndex(null)}
                                                 setValue={(callback) => {
                                                     const newValue = callback(memoItem.time)
-                                                    setMemoList((prev) => 
-                                                        prev.map((item) => 
-                                                            item.id === memoItem.id 
-                                                                ? { 
-                                                                    ...item, 
-                                                                    time: newValue,
-                                                                    updatedAt: newValue === 'none' ? null : Date.now()
-                                                                  } 
-                                                                : item
+                                                    if(newValue === 'custom') {
+                                                        setCustomTimeModalVisible(true)
+                                                    }else{
+                                                        setMemoList((prev) => 
+                                                            prev.map((item) => 
+                                                                item.id === memoItem.id 
+                                                                    ? { 
+                                                                        ...item, 
+                                                                        time: newValue,
+                                                                        updatedAt: newValue === 'none' ? null : Date.now()
+                                                                      } 
+                                                                    : item
+                                                            )
                                                         )
-                                                    )
+                                                    }
                                                 }}
                                                 setItems={setTimeOptions}
                                                 style={styles.dropdown}
@@ -435,6 +496,62 @@ const Home = () => {
                         <Text style={[styles.modalText, { marginBottom: 20 }]}>저장 공간이 부족합니다. 메모를 삭제하거나 용량을 정리해 주세요</Text>
                         <View style={styles.modalButtonContainer}>
                             <TouchableOpacity style={[styles.modalButton, styles.confirmButton]} onPress={handleStorageFullModalClose}>
+                                <Text style={styles.modalButtonText}>확인</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                <Modal
+                    isVisible={isCustomTimeModalVisible}
+                    onBackdropPress={() => setCustomTimeModalVisible(false)}
+                    onBackButtonPress={() => setCustomTimeModalVisible(false)}
+                    style={styles.modal}
+                    animationIn="fadeIn"
+                    animationOut="fadeOut"
+                    animationInTiming={200}
+                    animationOutTiming={200}
+                    backdropTransitionOutTiming={0}
+                    backdropOpacity={0.3}
+                >
+                    <View style={styles.modalContainer}>
+                        <Text style={styles.modalText}>시간 직접 입력</Text>
+                        <View style={styles.customTimeInputRow}>
+                            <TextInput
+                                style={styles.customTimeInput}
+                                keyboardType='numeric'
+                                value={customTimeValue}
+                                onChangeText={(text) => setCustomTimeValue(text.replace(/[^0-9]/g, ''))}
+                                placeholder='숫자 입력'
+                                maxLength={5}
+                                onFocus={() => setUnitDropdownOpen(false)}
+                            />
+                            <DropDownPicker
+                                open={unitDropdownOpen}
+                                value={customTimeUnit}
+                                items={timeUnitOptions}
+                                setOpen={setUnitDropdownOpen}
+                                setValue={setCustomTimeUnit}
+                                setItems={() => {}}
+                                style={styles.unitDropdown}
+                                dropDownContainerStyle={styles.unitDropdownContainer}
+                                textStyle={{ fontSize: 14, fontFamily: 'NanumGothic' }}
+                                zIndex={2000}
+                                zIndexInverse={2000}
+                            />
+                        </View>
+                        <Text style={[styles.modalText, { fontSize: 12 }]}>최대 1년까지 설정 가능</Text>
+                        <View style={styles.modalButtonContainer}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => setCustomTimeModalVisible(false)}
+                            >
+                                <Text style={styles.modalButtonText}>취소</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.confirmButton]}
+                                onPress={handleCustomTimeConfirm}
+                            >
                                 <Text style={styles.modalButtonText}>확인</Text>
                             </TouchableOpacity>
                         </View>
@@ -593,12 +710,43 @@ const styles = StyleSheet.create({
         backgroundColor: '#CD5C5C',
     },
     cancelButton: {
-        backgroundColor: '#708090',
+        backgroundColor: 'gray',
     },
     modalButtonText: {
         color: '#FFF',
         fontSize: 16,
         fontFamily: 'NanumGothic',
+    },
+    customTimeInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+        alignSelf: 'center',
+        maxWidth: 100,
+        gap: 10
+    },
+    customTimeInput: {
+        width: 100,
+        height: 50,
+        borderColor: '#DDD',
+        borderWidth: 1,
+        borderRadius: 5,
+        paddingHorizontal: 10,
+        marginRight: 10,
+        backgroundColor: '#FFF',
+        fontFamily: 'NanumGothic',
+    },
+    unitDropdown: {
+        width: 100,
+        height: 40,
+        borderColor: '#CCC',
+        borderRadius: 5,
+    },
+    unitDropdownContainer: {
+        width: 100,
+        borderColor: '#CCC',
+        borderRadius: 5,
     },
 })
 
