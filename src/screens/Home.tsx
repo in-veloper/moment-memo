@@ -1,11 +1,11 @@
-import { Alert, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
+import { Alert, FlatList, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
 import { Text, Card } from '@rneui/themed'
 import { useCallback, useEffect, useState } from 'react'
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5'
 import FontAwesome6 from 'react-native-vector-icons/FontAwesome6'
 import DropDownPicker from 'react-native-dropdown-picker'
 import { storage } from '../utils/storage'
-import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads'
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads'
 import Modal from 'react-native-modal'
 import notifee, { AndroidImportance, TimestampTrigger, TriggerType } from '@notifee/react-native'
 
@@ -13,55 +13,35 @@ type Memo = {
     id: number
     text: string
     time: string
+    unit: string
     updatedAt: number | null
 }
 
 const MEMO_STORAGE_KEY = 'memoList'
 
 const Home = () => {
-    const [open, setOpen] = useState(false)
-    const [timeOptions, setTimeOptions] = useState([
-        { label: '시간 선택', value: 'none'},
-        { label: '1분', value: '1' },
-        { label: '3분', value: '3' },
-        { label: '5분', value: '5' },
-        { label: '10분', value: '10' },
-        { label: '1시간', value: '60' },
-        { label: '12시간', value: '720' },
-        { label: '24시간', value: '1440' },
-        { label: '직접 입력', value: 'custom' }
-    ])
     const [memoList, setMemoList] = useState<Memo[]>([])
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
-    const sortOptions = [
-        { label: '등록 최신순', value: 'latest' },
-        { label: '등록 오래된순', value: 'oldest' },
-        { label: '삭제 임박순', value: 'urgent' },
-        { label: '삭제 여유순', value: 'relaxed' },
-    ]
     const [sortOpen, setSortOpen] = useState(false)
     const [selectedSort, setSelectedSort] = useState('latest')
     const [isDeleteModalVisible, setDeleteModalVisible] = useState(false)
     const [memoToDelete, setMemoToDelete] = useState<number | null>(null)
     const [isStorageFullModalVisible, setStorageFullModalVisible] = useState(false)
     const [scheduledNotifications, setScheduledNotifications] = useState<Set<number>>(new Set())
-    const [isCustomTimeModalVisible, setCustomTimeModalVisible] = useState(false)
-    const [customTimeValue, setCustomTimeValue] = useState<string>('')
-    const [customTimeUnit, setCustomTimeUnit] = useState<string>('minutes')
-    const [unitDropdownOpen, setUnitDropdownOpen] = useState(false)
-
-    // 단위 옵션
+    const [openUnitDropdown, setOpenUnitDropdown] = useState<number | null>(null)
+    const [isValidationModalVisible, setValidationModalVisible] = useState(false)
+    const [validationMessgae, setValidationMessage] = useState('')
+    const sortOptions = [
+        { label: '등록 최신순', value: 'latest' },
+        { label: '등록 오래된순', value: 'oldest' },
+        { label: '삭제 임박순', value: 'urgent' },
+        { label: '삭제 여유순', value: 'relaxed' },
+    ]
     const timeUnitOptions = [
         { label: '분', value: 'minutes' },
         { label: '시간', value: 'hours' },
         { label: '일', value: 'days' },
     ]
-
-    // const onPressSave = () => {
-    //     setOpen(false)
-    //     setSortOpen(false)
-    //     Keyboard.dismiss()
-    // }
 
     // notifee 초기화
     useEffect(() => {
@@ -102,7 +82,6 @@ const Home = () => {
             })
 
             setMemoList((prev) => prev.filter((item) => item.id !== memoToDelete))
-            setOpen(false)
             setSortOpen(false)
             Keyboard.dismiss()
         }
@@ -119,7 +98,8 @@ const Home = () => {
         const newMemo = {
             id: Date.now(),
             text: '',
-            time: 'none',
+            time: '',
+            unit: 'minutes',
             updatedAt: null
         }
         setMemoList((prev) => [...prev, newMemo])
@@ -133,72 +113,31 @@ const Home = () => {
             case 'oldest':
                 return list.sort((a, b) => a.id - b.id)
             case 'urgent':
-                return list.sort((a, b) => parseInt(a.time) - parseInt(b.time))
+                return list.sort((a, b) => {
+                    const aMinutes = a.time ? convertToMinutes(a.time, a.unit) : Infinity
+                    const bMinutes = b.time ? convertToMinutes(b.time, b.unit) : Infinity
+                    return aMinutes - bMinutes
+                })
             case 'relaxed':
-                return list.sort((a, b) => parseInt(b.time) - parseInt(a.time))
+                return list.sort((a, b) => {
+                    const aMinutes = a.time ? convertToMinutes(a.time, a.unit) : -Infinity
+                    const bMinutes = b.time ? convertToMinutes(b.time, b.unit) : -Infinity
+                    return bMinutes - aMinutes
+                })
             default:
                 return list
         }
     }
 
     const onFocusTextInput = () => {
-        setOpen(false)
         setSortOpen(false)
-        setUnitDropdownOpen(false)
+        setOpenUnitDropdown(null)
     }
 
     const onPressFilter = () => {
         setSortOpen((prev) => !prev)
-        setOpen(false)
-        setUnitDropdownOpen(false)
+        setOpenUnitDropdown(null)
         Keyboard.dismiss()
-    }
-
-    const onOpenDropdown = (index: number) => {
-        setSelectedIndex(index)
-        Keyboard.dismiss()
-    }
-
-    // 직접 입력 모달 확인 버튼
-    const handleCustomTimeConfirm = () => {
-        const value = parseFloat(customTimeValue)
-        if(isNaN(value) || value <= 0) {
-            Alert.alert('오류', '유효한 숫자를 입력해 주세요')
-            return
-        }
-
-        // 단위에 따라 분으로 변환
-        let minutes: number
-        switch (customTimeUnit) {
-            case 'minutes':
-                minutes = value
-                break
-            case 'hours':
-                minutes = value * 60
-            case 'days':
-                minutes = value * 60 * 24
-                break
-            default:
-                minutes = value
-        }
-
-        if(minutes > 525600) {
-            Alert.alert('오류', '최대 1년까지만 설정 가능합니다')
-            return
-        }
-
-        setMemoList((prev) =>
-            prev.map((item, idx) =>
-                idx === selectedIndex
-                    ? { ...item, time: minutes.toString(), updatedAt: Date.now() }
-                    : item
-            )
-        )
-
-        setCustomTimeModalVisible(false)
-        setCustomTimeValue('')
-        setCustomTimeUnit('minutes')
-        setOpen(false)
     }
 
     useEffect(() => {
@@ -208,7 +147,8 @@ const Home = () => {
             const updatedList = parsed.map((memo: any) => ({
                 ...memo,
                 updatedAt: memo.updatedAt || null,
-                time: memo.time || 'none'
+                time: memo.time || '',
+                unit: memo.unit || 'minutes'
             }))
             setMemoList(updatedList)
         }else{
@@ -243,14 +183,13 @@ const Home = () => {
             const now = Date.now()
             setMemoList((prev) => {
                 const updatedList = prev.filter((memo) => {
-                    if(memo.time === 'none' || !memo.updatedAt) {
+                    if(!memo.time || !memo.updatedAt) {
                         return true
                     }
 
-                    const updatedAt = memo.updatedAt
-                    const timeInMinutes = parseInt(memo.time)
+                    const timeInMinutes = convertToMinutes(memo.time, memo.unit)
                     const timeInMilliseconds = timeInMinutes * 60 * 1000
-                    const expirationTime = updatedAt + timeInMilliseconds
+                    const expirationTime = memo.updatedAt + timeInMilliseconds
                     const timeLeft = expirationTime - now
                     
                     // 삭제 1분 전 알림 예약
@@ -290,7 +229,8 @@ const Home = () => {
                     const newMemo: Memo = {
                         id: Date.now(),
                         text: '',
-                        time: 'none',
+                        time: '',
+                        unit: 'minutes',
                         updatedAt: null
                     }
                     updatedList.push(newMemo)
@@ -311,12 +251,22 @@ const Home = () => {
 
     const handleBackgroundPress = useCallback(() => {
         if(!isDeleteModalVisible && !isStorageFullModalVisible) {
-            setOpen(false)
             setSortOpen(false)
-            setUnitDropdownOpen(false)
+            setOpenUnitDropdown(null)
             Keyboard.dismiss()
         }
-    }, [isDeleteModalVisible, isStorageFullModalVisible, isCustomTimeModalVisible])
+    }, [isDeleteModalVisible, isStorageFullModalVisible])
+
+    const convertToMinutes = (time: string, unit: string): number => {
+        const value = parseFloat(time)
+        if (isNaN(value)) return 0
+        switch (unit) {
+            case 'minutes': return value
+            case 'hours': return value * 60
+            case 'days': return value * 60 * 24
+            default: return value
+        }
+    }
 
     return (
         <TouchableWithoutFeedback onPress={handleBackgroundPress}>
@@ -326,114 +276,121 @@ const Home = () => {
                     keyboardVerticalOffset={20}
                     style={styles.keyboardAvoidingView}
                 >
-                    <ScrollView 
-                        nestedScrollEnabled={true} 
-                        keyboardShouldPersistTaps="handled" 
-                        showsVerticalScrollIndicator={false} 
-                        contentContainerStyle={styles.scrollViewContentContainer}
-                        contentInsetAdjustmentBehavior="automatic"
-                    >
-                        <View style={styles.titleHeaderRow}>
-                            <Text style={styles.title}>블립노트</Text>
-                            <View style={{ position: 'relative'}}>
-                                <TouchableOpacity onPress={onPressFilter}>
-                                    <FontAwesome6 name='sliders' size={25}/>
-                                </TouchableOpacity>
-                                {sortOpen && (
-                                    <View style={styles.sortDropdownWrapper}>
-                                        <DropDownPicker 
-                                            open={true}
-                                            value={selectedSort}
-                                            items={sortOptions}
-                                            setOpen={() => setSortOpen(true)}
-                                            setValue={setSelectedSort}
-                                            setItems={(() => {})}
-                                            style={{ display: 'none' }}
-                                            dropDownContainerStyle={styles.sortDropdownContainer}
-                                            textStyle={{ fontSize: 14 }}
-                                            placeholder='정렬 선택'
-                                            listMode='SCROLLVIEW'
-                                            onClose={() => setSortOpen(false)}
-                                            showArrowIcon={false}
-                                            zIndex={10000}
-                                            zIndexInverse={10000}
+                    <FlatList
+                        data={getSortedMemoList()}
+                        renderItem={({ item, index }) => (
+                            <Card key={item.id} containerStyle={[styles.card, { zIndex: selectedIndex === index ? 1000 : 1 }]}>
+                                <View style={styles.headerRow}>
+                                    <View style={styles.timeInputContainer}>
+                                    <TextInput
+                                        style={styles.timeInput}
+                                        keyboardType="numeric"
+                                        value={item.time}
+                                        onChangeText={(text) => {
+                                            const value = text.replace(/[^0-9]/g, '')
+                                            const numValue = parseFloat(value)
+                                            if (value && (numValue <= 0 || numValue > 525600 / convertToMinutes('1', item.unit))) {
+                                                setValidationMessage('최대 1년 이내의 기간을 입력하세요')
+                                                setValidationModalVisible(true)
+                                                return
+                                            }
+                                            setMemoList((prev) =>
+                                                prev.map((memo) =>
+                                                    memo.id === item.id
+                                                        ? { ...memo, time: value, updatedAt: value ? Date.now() : null }
+                                                        : memo
+                                                )
+                                            )
+                                        }}
+                                        placeholder="시간"
+                                        maxLength={5}
+                                        onFocus={() => setOpenUnitDropdown(null)}
+                                    />
+                                    </View>
+                                    <View style={styles.unitDropdownWrapper}>
+                                        <DropDownPicker
+                                            open={openUnitDropdown === item.id}
+                                            value={item.unit}
+                                            items={timeUnitOptions}
+                                            setOpen={(value) => {
+                                                const isOpen = typeof value === 'function' ? value(openUnitDropdown === item.id) : value
+                                                setOpenUnitDropdown(isOpen ? item.id : null)
+                                            }}
+                                            setValue={(callback) => {
+                                                const newUnit = typeof callback === 'function' ? callback(item.unit) : callback
+                                                setMemoList((prev) =>
+                                                    prev.map((memo) =>
+                                                        memo.id === item.id
+                                                            ? { ...memo, unit: newUnit, time: '', updatedAt: memo.time ? Date.now() : null }
+                                                            : memo
+                                                    )
+                                                )
+                                            }}
+                                            setItems={() => {}}
+                                            style={styles.unitDropdown}
+                                            dropDownContainerStyle={styles.unitDropdownContainer}
+                                            textStyle={{ fontSize: 14, fontFamily: 'NanumGothic' }}
+                                            zIndex={5000}
+                                            zIndexInverse={5000}
                                         />
                                     </View>
-                                )}
-                            </View>
-                        </View>
-                        {getSortedMemoList().map((memoItem, index) => (
-                            <Card key={memoItem.id} containerStyle={[styles.card, {zIndex: selectedIndex === index ? 1000 : 1}]}>
-                                <View style={styles.headerRow}>
-                                    <View style={styles.pickerContainer}>
-                                        <View>
-                                            <DropDownPicker 
-                                                open={open && selectedIndex === index}
-                                                value={memoItem.time}
-                                                items={timeOptions}
-                                                setOpen={setOpen}
-                                                onOpen={() => onOpenDropdown(index)}
-                                                onClose={() => setSelectedIndex(null)}
-                                                setValue={(callback) => {
-                                                    const newValue = callback(memoItem.time)
-                                                    if(newValue === 'custom') {
-                                                        setCustomTimeModalVisible(true)
-                                                    }else{
-                                                        setMemoList((prev) => 
-                                                            prev.map((item) => 
-                                                                item.id === memoItem.id 
-                                                                    ? { 
-                                                                        ...item, 
-                                                                        time: newValue,
-                                                                        updatedAt: newValue === 'none' ? null : Date.now()
-                                                                      } 
-                                                                    : item
-                                                            )
-                                                        )
-                                                    }
-                                                }}
-                                                setItems={setTimeOptions}
-                                                style={styles.dropdown}
-                                                dropDownContainerStyle={styles.dropdownContainer}
-                                                textStyle={{ fontSize: 14, fontFamily: 'NanumGothic' }}
-                                                labelStyle={{ color: '#36454F' }}
-                                                selectedItemLabelStyle={{ fontWeight: 'bold' }}
-                                                placeholder="시간 선택"
-                                                listMode="SCROLLVIEW"
-                                                closeOnBackPressed={true}
-                                                zIndex={5000}
-                                                zIndexInverse={5000}
-                                            />
-                                        </View>
-                                        <Text style={{ color: '#36454F', marginTop: 12, marginLeft: 7, fontFamily: 'NanumGothic',fontWeight: 'bold' }}>후 자동 삭제</Text>
-                                    </View>
+                                    <Text style={styles.afterText}>후 자동 삭제</Text>
                                     <View style={styles.buttonGroup}>
-                                        {/* <TouchableOpacity onPress={onPressSave}>
-                                            <Entypo name='save' size={25} color="#708090" />
-                                        </TouchableOpacity> */}
-                                        <TouchableOpacity onPress={() => onPressDelete(memoItem.id)}>
-                                            <FontAwesome5 name='trash-alt' size={25} color="#CD5C5C" />
+                                        <TouchableOpacity onPress={() => onPressDelete(item.id)}>
+                                            <FontAwesome5 name="trash-alt" size={25} color="#CD5C5C" />
                                         </TouchableOpacity>
                                     </View>
                                 </View>
-                                <TextInput 
+                                <TextInput
                                     style={styles.memoInput}
                                     multiline
                                     placeholder={`잠깐 기록할 메모를 입력하세요!\n(500자까지만 메모가 가능합니다)\n(메모 시 바로 자동 저장됩니다)`}
-                                    value={memoItem.text}
+                                    value={item.text}
                                     maxLength={500}
                                     onChangeText={(text) => {
-                                        setMemoList((prev) => 
-                                            prev.map((item) => 
-                                                item.id === memoItem.id ? { ...item, text } : item
-                                            )
-                                        )
+                                        setMemoList((prev) =>
+                                            prev.map((memo) => (memo.id === item.id ? { ...memo, text } : memo))
+                                        );
                                     }}
                                     onFocus={onFocusTextInput}
                                 />
                             </Card>
-                        ))}
-                    </ScrollView>
+                        )}
+                        keyExtractor={(item) => item.id.toString()}
+                        ListHeaderComponent={
+                            <View style={styles.titleHeaderRow}>
+                                <Text style={styles.title}>블립노트</Text>
+                                <View style={{ position: 'relative' }}>
+                                    <TouchableOpacity onPress={onPressFilter}>
+                                        <FontAwesome6 name="sliders" size={25} />
+                                    </TouchableOpacity>
+                                    {sortOpen && (
+                                        <View style={styles.sortDropdownWrapper}>
+                                            <DropDownPicker
+                                                open={true}
+                                                value={selectedSort}
+                                                items={sortOptions}
+                                                setOpen={() => setSortOpen(true)}
+                                                setValue={setSelectedSort}
+                                                setItems={() => {}}
+                                                style={{ display: 'none' }}
+                                                dropDownContainerStyle={styles.sortDropdownContainer}
+                                                textStyle={{ fontSize: 14 }}
+                                                placeholder="정렬 선택"
+                                                listMode="SCROLLVIEW"
+                                                onClose={() => setSortOpen(false)}
+                                                showArrowIcon={false}
+                                                zIndex={10000}
+                                                zIndexInverse={10000}
+                                            />
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        }
+                        contentContainerStyle={styles.scrollViewContentContainer}
+                        showsVerticalScrollIndicator={false}
+                    />
                     <TouchableOpacity
                         style={styles.fab}
                         onPress={onPressNewCard}
@@ -503,9 +460,9 @@ const Home = () => {
                 </Modal>
 
                 <Modal
-                    isVisible={isCustomTimeModalVisible}
-                    onBackdropPress={() => setCustomTimeModalVisible(false)}
-                    onBackButtonPress={() => setCustomTimeModalVisible(false)}
+                    isVisible={isValidationModalVisible}
+                    onBackdropPress={() => setValidationModalVisible(false)}
+                    onBackButtonPress={() => setValidationModalVisible(false)}
                     style={styles.modal}
                     animationIn="fadeIn"
                     animationOut="fadeOut"
@@ -515,42 +472,11 @@ const Home = () => {
                     backdropOpacity={0.3}
                 >
                     <View style={styles.modalContainer}>
-                        <Text style={styles.modalText}>시간 직접 입력</Text>
-                        <View style={styles.customTimeInputRow}>
-                            <TextInput
-                                style={styles.customTimeInput}
-                                keyboardType='numeric'
-                                value={customTimeValue}
-                                onChangeText={(text) => setCustomTimeValue(text.replace(/[^0-9]/g, ''))}
-                                placeholder='숫자 입력'
-                                maxLength={5}
-                                onFocus={() => setUnitDropdownOpen(false)}
-                            />
-                            <DropDownPicker
-                                open={unitDropdownOpen}
-                                value={customTimeUnit}
-                                items={timeUnitOptions}
-                                setOpen={setUnitDropdownOpen}
-                                setValue={setCustomTimeUnit}
-                                setItems={() => {}}
-                                style={styles.unitDropdown}
-                                dropDownContainerStyle={styles.unitDropdownContainer}
-                                textStyle={{ fontSize: 14, fontFamily: 'NanumGothic' }}
-                                zIndex={2000}
-                                zIndexInverse={2000}
-                            />
-                        </View>
-                        <Text style={[styles.modalText, { fontSize: 12 }]}>최대 1년까지 설정 가능</Text>
+                        <Text style={styles.modalText}>{validationMessgae}</Text>
                         <View style={styles.modalButtonContainer}>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
-                                onPress={() => setCustomTimeModalVisible(false)}
-                            >
-                                <Text style={styles.modalButtonText}>취소</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
                                 style={[styles.modalButton, styles.confirmButton]}
-                                onPress={handleCustomTimeConfirm}
+                                onPress={() => setValidationModalVisible(false)}
                             >
                                 <Text style={styles.modalButtonText}>확인</Text>
                             </TouchableOpacity>
@@ -598,7 +524,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8
+    },
+    timeInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    timeInput: {
+        width: 70,
+        height: 50,
+        borderColor: '#CCC',
+        borderWidth: 1,
+        borderRadius: 6,
+        backgroundColor: '#FFF',
+        fontFamily: 'NanumGothic',
+        textAlign: 'center'
+    },
+    afterText: {
+        color: '#36454F',
+        marginLeft: 7,
+        fontFamily: 'NanumGothic',
+        fontWeight: 'bold'
     },
     label: {
         fontSize: 16,
@@ -614,7 +559,7 @@ const styles = StyleSheet.create({
         height: 38,
         borderRadius: 6,
         borderColor: '#CCC',
-        elevation: 3
+        elevation: 3,
     },
     dropdownContainer: {
         width: 110,
@@ -638,7 +583,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 10, 
         paddingRight: 10, 
-        marginTop: 10
     },
     fab: {
         position: 'absolute',
@@ -717,31 +661,14 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: 'NanumGothic',
     },
-    customTimeInputRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-        alignSelf: 'center',
-        maxWidth: 100,
-        gap: 10
-    },
-    customTimeInput: {
-        width: 100,
-        height: 50,
-        borderColor: '#DDD',
-        borderWidth: 1,
-        borderRadius: 5,
-        paddingHorizontal: 10,
-        marginRight: 10,
-        backgroundColor: '#FFF',
-        fontFamily: 'NanumGothic',
+    unitDropdownWrapper: {
+        alignSelf: 'center'
     },
     unitDropdown: {
         width: 100,
-        height: 40,
         borderColor: '#CCC',
         borderRadius: 5,
+        paddingVertical: 0,
     },
     unitDropdownContainer: {
         width: 100,
