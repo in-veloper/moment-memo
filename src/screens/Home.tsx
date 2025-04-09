@@ -276,6 +276,35 @@ const Home = () => {
                     keyboardVerticalOffset={20}
                     style={styles.keyboardAvoidingView}
                 >
+                    <View style={styles.titleHeaderRow}>
+                        <Text style={styles.title}>블립노트</Text>
+                        <View style={{ position: 'relative' }}>
+                            <TouchableOpacity onPress={onPressFilter}>
+                                <FontAwesome6 name="sliders" size={25} />
+                            </TouchableOpacity>
+                            {sortOpen && (
+                                <View style={styles.sortDropdownWrapper}>
+                                    <DropDownPicker
+                                        open={true}
+                                        value={selectedSort}
+                                        items={sortOptions}
+                                        setOpen={() => setSortOpen(true)}
+                                        setValue={setSelectedSort}
+                                        setItems={() => {}}
+                                        style={{ display: 'none' }}
+                                        dropDownContainerStyle={styles.sortDropdownContainer}
+                                        textStyle={{ fontSize: 14 }}
+                                        placeholder="정렬 선택"
+                                        listMode="SCROLLVIEW"
+                                        onClose={() => setSortOpen(false)}
+                                        showArrowIcon={false}
+                                        zIndex={9999}
+                                        zIndexInverse={9999}
+                                    />
+                                </View>
+                            )}
+                        </View>
+                    </View>
                     <FlatList
                         data={getSortedMemoList()}
                         renderItem={({ item, index }) => (
@@ -357,39 +386,9 @@ const Home = () => {
                             </Card>
                         )}
                         keyExtractor={(item) => item.id.toString()}
-                        ListHeaderComponent={
-                            <View style={styles.titleHeaderRow}>
-                                <Text style={styles.title}>블립노트</Text>
-                                <View style={{ position: 'relative' }}>
-                                    <TouchableOpacity onPress={onPressFilter}>
-                                        <FontAwesome6 name="sliders" size={25} />
-                                    </TouchableOpacity>
-                                    {sortOpen && (
-                                        <View style={styles.sortDropdownWrapper}>
-                                            <DropDownPicker
-                                                open={true}
-                                                value={selectedSort}
-                                                items={sortOptions}
-                                                setOpen={() => setSortOpen(true)}
-                                                setValue={setSelectedSort}
-                                                setItems={() => {}}
-                                                style={{ display: 'none' }}
-                                                dropDownContainerStyle={styles.sortDropdownContainer}
-                                                textStyle={{ fontSize: 14 }}
-                                                placeholder="정렬 선택"
-                                                listMode="SCROLLVIEW"
-                                                onClose={() => setSortOpen(false)}
-                                                showArrowIcon={false}
-                                                zIndex={10000}
-                                                zIndexInverse={10000}
-                                            />
-                                        </View>
-                                    )}
-                                </View>
-                            </View>
-                        }
                         contentContainerStyle={styles.scrollViewContentContainer}
                         showsVerticalScrollIndicator={false}
+                        removeClippedSubviews={false}
                     />
                     <TouchableOpacity
                         style={styles.fab}
@@ -503,6 +502,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingLeft: 30,
         paddingRight: 30,
+        paddingTop: 20
     },
     title: {
         fontSize: 25,
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
     },
     scrollViewContentContainer: {
         flexGrow: 1,
-        marginTop: 20,
+        marginTop: 5,
         paddingBottom: 50
     },
     card: {
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
         width: 150, 
         position: 'absolute', 
         top: 35, 
-        right: -15, 
+        right: -15,
         zIndex: 9999
     },
     sortDropdownContainer: {
