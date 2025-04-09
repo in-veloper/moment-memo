@@ -541,9 +541,9 @@ const styles = StyleSheet.create({
     },
     afterText: {
         color: '#36454F',
-        marginLeft: 7,
         fontFamily: 'NanumGothic',
-        fontWeight: 'bold'
+        fontWeight: 'bold',
+        paddingRight: 30
     },
     label: {
         fontSize: 16,
