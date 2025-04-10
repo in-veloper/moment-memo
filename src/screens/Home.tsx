@@ -207,7 +207,7 @@ const Home = () => {
                                 body: `"${memo.text.slice(0, 20)}${memo.text.length > 20 ? '...' : ''}" 메모가 1분 후 삭제됩니다`,
                                 android: {
                                     channelId: 'memo_channel',
-                                    smallIcon: 'ic_stat_icon',
+                                    smallIcon: 'ic_notification',
                                     sound: 'default',
                                     vibrationPattern: [300, 500],
                                     pressAction: {
