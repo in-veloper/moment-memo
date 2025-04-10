@@ -289,11 +289,17 @@ const Home = () => {
                                         open={true}
                                         value={selectedSort}
                                         items={sortOptions}
-                                        setOpen={() => setSortOpen(true)}
+                                        setOpen={() => {
+                                            setSortOpen(true)
+                                            setOpenUnitDropdown(null)
+                                        }}
                                         setValue={setSelectedSort}
                                         setItems={() => {}}
                                         style={{ display: 'none' }}
                                         dropDownContainerStyle={styles.sortDropdownContainer}
+                                        selectedItemLabelStyle={{
+                                            fontWeight: 'bold'
+                                        }}
                                         textStyle={{ fontSize: 14 }}
                                         placeholder="정렬 선택"
                                         listMode="SCROLLVIEW"
@@ -345,6 +351,7 @@ const Home = () => {
                                             setOpen={(value) => {
                                                 const isOpen = typeof value === 'function' ? value(openUnitDropdown === item.id) : value
                                                 setOpenUnitDropdown(isOpen ? item.id : null)
+                                                setSortOpen(false)
                                             }}
                                             setValue={(callback) => {
                                                 const newUnit = typeof callback === 'function' ? callback(item.unit) : callback
@@ -359,6 +366,9 @@ const Home = () => {
                                             setItems={() => {}}
                                             style={styles.unitDropdown}
                                             dropDownContainerStyle={styles.unitDropdownContainer}
+                                            selectedItemLabelStyle={{
+                                                fontWeight: 'bold'
+                                            }}
                                             textStyle={{ fontSize: 14, fontFamily: 'NanumGothic' }}
                                             zIndex={5000}
                                             zIndexInverse={5000}
@@ -538,6 +548,7 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         backgroundColor: '#FFF',
         fontFamily: 'NanumGothic',
+        fontWeight: 'bold',
         textAlign: 'center'
     },
     afterText: {
